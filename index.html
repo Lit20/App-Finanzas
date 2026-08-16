@@ -139,7 +139,8 @@ function computeApartados(config, expenses, payments, reservations, horizonDays 
             return { ...exp, nextOccurrence: null };
         const reserved = sumReserved(reservations, exp.id, occ);
         const remaining = Math.max(0, exp.amount - reserved);
-        const eligible = incomeDates.filter((d) => d <= occ);
+        const eligibleRaw = incomeDates.filter((d) => d <= occ);
+        const eligible = eligibleRaw.length > 0 ? eligibleRaw : incomeDates.slice(0, 1); // si no hay pago antes del vencimiento, se asigna al próximo pago igual
         const n = Math.max(1, eligible.length);
         const perWeek = remaining / n;
         eligible.forEach((d) => allocation[d].push({ expenseId: exp.id, name: exp.name, amount: perWeek, occurrence: occ }));
@@ -668,6 +669,7 @@ function NuevoGastoModal({ categories, onClose, onSave }) {
     const [categoryId, setCategoryId] = useState(((_a = categories[0]) === null || _a === void 0 ? void 0 : _a.id) || "");
     const [frequency, setFrequency] = useState("monthly");
     const [dueDay, setDueDay] = useState(1);
+    const [dueDate, setDueDate] = useState(todayISO());
     return (React.createElement(ModalShell, { title: "Nuevo compromiso", onClose: onClose },
         React.createElement(Field, { label: "Nombre" },
             React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), className: inputCls })),
@@ -680,8 +682,10 @@ function NuevoGastoModal({ categories, onClose, onSave }) {
                 React.createElement("option", { value: "monthly" }, "Mensual (d\u00EDa del mes)"),
                 React.createElement("option", { value: "weekly" }, "Semanal (d\u00EDa de la semana)"),
                 React.createElement("option", { value: "once" }, "\u00DAnico"))),
+        frequency === "once" && (React.createElement(Field, { label: "Fecha de vencimiento" },
+            React.createElement("input", { type: "date", value: dueDate, onChange: (e) => setDueDate(e.target.value), className: inputCls }))),
         frequency !== "once" && (React.createElement(Field, { label: frequency === "monthly" ? "Día del mes" : "Día de la semana" }, frequency === "monthly" ? React.createElement("input", { type: "number", min: 1, max: 31, value: dueDay, onChange: (e) => setDueDay(Number(e.target.value)), className: inputCls }) : (React.createElement("select", { value: dueDay, onChange: (e) => setDueDay(Number(e.target.value)), className: inputCls }, WEEKDAY_NAMES.map((n, i) => React.createElement("option", { key: i, value: i }, n)))))),
-        React.createElement("button", { onClick: () => onSave({ id: Date.now().toString(), name, amount, categoryId, frequency, dueDay: frequency !== "once" ? dueDay : undefined, dueDate: frequency === "once" ? todayISO() : undefined, active: true }), disabled: !name || !amount, className: "tap w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-40", style: { background: "var(--accent)", color: "var(--accentText)" } },
+        React.createElement("button", { onClick: () => onSave({ id: Date.now().toString(), name, amount, categoryId, frequency, dueDay: frequency !== "once" ? dueDay : undefined, dueDate: frequency === "once" ? dueDate : undefined, active: true }), disabled: !name || !amount, className: "tap w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-40", style: { background: "var(--accent)", color: "var(--accentText)" } },
             React.createElement(ChevronRight, { size: 16 }),
             " Crear compromiso")));
 }
