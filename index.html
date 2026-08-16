@@ -147,6 +147,48 @@ function computeApartados(config, expenses, payments, reservations, horizonDays 
     });
     return { incomeDates, allocation, perExpense };
 }
+// Proyección calendario: cuánto cae cada mes por cada compromiso, y el ingreso estimado de ese mes.
+function computeMonthlyPlan(config, expenses, monthsAhead = 3) {
+    const today = new Date();
+    const months = [];
+    for (let i = 0; i < monthsAhead; i++) {
+        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+        const y = d.getFullYear(), m = d.getMonth();
+        const dim = daysInMonth(y, m);
+        const items = [];
+        expenses.filter((e) => e.active).forEach((exp) => {
+            if (exp.frequency === "monthly") {
+                const day = Math.min(exp.dueDay, dim);
+                items.push({ name: exp.name, amount: exp.amount, date: toISO(new Date(y, m, day)) });
+            }
+            else if (exp.frequency === "weekly") {
+                let count = 0;
+                for (let dd = 1; dd <= dim; dd++)
+                    if (new Date(y, m, dd).getDay() === exp.dueDay)
+                        count++;
+                items.push({ name: `${exp.name} (${count} semanas)`, amount: exp.amount * count, date: null });
+            }
+            else if (exp.frequency === "once" && exp.dueDate) {
+                const dd = fromISO(exp.dueDate);
+                if (dd.getFullYear() === y && dd.getMonth() === m)
+                    items.push({ name: exp.name, amount: exp.amount, date: exp.dueDate });
+            }
+        });
+        let incomeCount = 0;
+        for (let dd = 1; dd <= dim; dd++)
+            if (new Date(y, m, dd).getDay() === config.payday)
+                incomeCount++;
+        const total = items.reduce((s, it) => s + it.amount, 0);
+        months.push({
+            key: `${y}-${pad(m + 1)}`,
+            label: d.toLocaleDateString("es-MX", { month: "long", year: "numeric" }),
+            items,
+            total,
+            incomeEstimate: incomeCount * config.weeklyIncome,
+        });
+    }
+    return months;
+}
 /* ============================================================
    DATA
    ============================================================ */
@@ -192,9 +234,11 @@ const fmtDate = (iso) => fromISO(iso).toLocaleDateString("es-MX", { day: "numeri
    THEME — índigo vibrante sobre base fría. Distinto de antes.
    ============================================================ */
 const THEMES = {
-    light: { bg: "#F3F4FB", card: "#FFFFFF", border: "#E3E5F5", ink: "#1B1D2B", sub: "#6E7191", accent: "#5B5FEF", accentText: "#FFFFFF", accentSoft: "#E9E9FE", warnSoft: "#FDF1DE", warn: "#B4761F", riskSoft: "#FCE8E6", risk: "#D14343", navBg: "#FFFFFF", celebrate: "#16A34A" },
-    dark: { bg: "#14151F", card: "#1D1F2E", border: "#2C2E42", ink: "#D8D3C7", sub: "#9A9689", accent: "#7B7FFF", accentText: "#14151F", accentSoft: "#262A4A", warnSoft: "#332B14", warn: "#E8B152", riskSoft: "#3A1E1C", risk: "#EF6F62", navBg: "#1D1F2E", celebrate: "#34D399" },
+    light: { bg: "#F3F4FB", card: "#FFFFFF", border: "#E3E5F5", ink: "#1B1D2B", sub: "#6E7191", accent: "#5B5FEF", accentText: "#FFFFFF", accentSoft: "#E9E9FE", warnSoft: "#FDF1DE", warn: "#B4761F", riskSoft: "#FCE8E6", risk: "#D14343", navBg: "#FFFFFF", celebrate: "#16A34A", glow: "none", glowFilter: "none" },
+    dark: { bg: "#14151F", card: "#1D1F2E", border: "#2C2E42", ink: "#D8D3C7", sub: "#9A9689", accent: "#7B7FFF", accentText: "#14151F", accentSoft: "#262A4A", warnSoft: "#332B14", warn: "#E8B152", riskSoft: "#3A1E1C", risk: "#EF6F62", navBg: "#1D1F2E", celebrate: "#34D399", glow: "none", glowFilter: "none" },
+    neon: { bg: "#08070F", card: "#100E1C", border: "#2E1F4D", ink: "#F1EEFF", sub: "#9C93C9", accent: "#00F0D6", accentText: "#04120F", accentSoft: "#152A28", warnSoft: "#2A2312", warn: "#FFD60A", riskSoft: "#2A1220", risk: "#FF3E7F", navBg: "#100E1C", celebrate: "#39FF7A", glow: "0 0 16px -2px var(--accent), 0 0 3px var(--accent)", glowFilter: "drop-shadow(0 0 6px var(--accent))" },
 };
+const THEME_ORDER = ["light", "dark", "neon"];
 /* ---------- animación de conteo ---------- */
 function useCountUp(target, duration = 650) {
     const [display, setDisplay] = useState(target);
@@ -240,7 +284,8 @@ function FinanzasApp() {
         return React.createElement("div", { className: "min-h-screen flex items-center justify-center bg-[#F3F4FB]" },
             React.createElement("p", { className: "font-mono text-sm text-[#6E7191] tracking-widest" }, "CARGANDO\u2026"));
     }
-    const vars = { "--bg": t.bg, "--card": t.card, "--border": t.border, "--ink": t.ink, "--sub": t.sub, "--accent": t.accent, "--accentText": t.accentText, "--accentSoft": t.accentSoft, "--warnSoft": t.warnSoft, "--warn": t.warn, "--riskSoft": t.riskSoft, "--risk": t.risk, "--navBg": t.navBg, "--celebrate": t.celebrate };
+    const vars = { "--bg": t.bg, "--card": t.card, "--border": t.border, "--ink": t.ink, "--sub": t.sub, "--accent": t.accent, "--accentText": t.accentText, "--accentSoft": t.accentSoft, "--warnSoft": t.warnSoft, "--warn": t.warn, "--riskSoft": t.riskSoft, "--risk": t.risk, "--navBg": t.navBg, "--celebrate": t.celebrate, "--glow": t.glow, "--glowFilter": t.glowFilter };
+    const nextTheme = () => setThemeName(THEME_ORDER[(THEME_ORDER.indexOf(themeName) + 1) % THEME_ORDER.length]);
     return (React.createElement("div", { style: vars, className: "min-h-screen bg-[var(--bg)] text-[var(--ink)] pb-24 transition-colors duration-300" },
         React.createElement("style", null, `
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
@@ -260,11 +305,11 @@ function FinanzasApp() {
         .tap:active { transform: scale(0.94); }
       `),
         React.createElement("div", { className: "f-body max-w-md mx-auto" },
-            React.createElement(Header, { config: config, themeName: themeName, onToggleTheme: () => setThemeName(themeName === "light" ? "dark" : "light") }),
+            React.createElement(Header, { config: config, themeName: themeName, onToggleTheme: nextTheme }),
             React.createElement("div", { key: tab, className: "rise" },
                 tab === "inicio" && (React.createElement(Dashboard, { config: config, expenses: expenses, categories: categories, payments: payments, reservations: reservations, incomeReceipts: incomeReceipts, totalAhorrado: totalAhorrado, plan: plan, onQuickAction: setModal, onApartar: (expenseId) => setModal({ type: "apartado", expenseId }) })),
                 tab === "ingresos" && React.createElement(IngresosScreen, { config: config, incomeReceipts: incomeReceipts, setIncomeReceipts: setIncomeReceipts, plan: plan }),
-                tab === "gastos" && React.createElement(GastosScreen, { expenses: expenses, setExpenses: setExpenses, categories: categories, payments: payments, plan: plan }),
+                tab === "gastos" && React.createElement(GastosScreen, { expenses: expenses, setExpenses: setExpenses, categories: categories, payments: payments, plan: plan, config: config }),
                 tab === "ahorros" && React.createElement(AhorrosScreen, { savingsGoals: savingsGoals, setSavingsGoals: setSavingsGoals, totalAhorrado: totalAhorrado }),
                 tab === "ajustes" && React.createElement(AjustesScreen, { config: config, setConfig: setConfig }))),
         React.createElement(BottomNav, { tab: tab, setTab: setTab }),
@@ -279,7 +324,7 @@ function Header({ config, themeName, onToggleTheme }) {
             React.createElement("h1", { className: "f-display text-xl font-bold" },
                 "Ciclo de ",
                 WEEKDAY_NAMES[config.payday])),
-        React.createElement("button", { onClick: onToggleTheme, className: "tap w-9 h-9 rounded-full bg-[var(--card)] border border-[var(--border)] flex items-center justify-center" }, themeName === "light" ? React.createElement(Moon, { size: 16 }) : React.createElement(Sun, { size: 16 }))));
+        React.createElement("button", { onClick: onToggleTheme, className: "tap w-9 h-9 rounded-full bg-[var(--card)] border border-[var(--border)] flex items-center justify-center", "aria-label": "Cambiar tema", style: { boxShadow: "var(--glow)" } }, themeName === "light" ? React.createElement(Moon, { size: 16 }) : themeName === "dark" ? React.createElement(Sparkles, { size: 16 }) : React.createElement(Sun, { size: 16 }))));
 }
 function BottomNav({ tab, setTab }) {
     const items = [
@@ -324,7 +369,8 @@ function Dashboard({ config, expenses, categories, payments, reservations, incom
                     React.createElement("div", { className: "flex items-center gap-2" },
                         React.createElement(Sparkles, { size: 16, style: { color: "var(--accent)" } }),
                         React.createElement("p", { className: "text-sm font-semibold" }, "Disponible para gastar")),
-                    React.createElement("p", { className: "f-money text-xl font-bold", style: { color: "var(--accent)" } }, MONEY(animDisponible))))),
+                    React.createElement("p", { className: "f-money text-xl font-bold", style: { color: "var(--accent)", filter: "var(--glowFilter)" } }, MONEY(animDisponible))))),
+        React.createElement(ProximasSemanas, { plan: plan, categories: categories, expenses: expenses, onApartar: onApartar }),
         allCovered && (React.createElement("div", { className: "rounded-2xl p-3 flex items-center gap-2 pop", style: { background: "var(--accentSoft)" } },
             React.createElement(CircleCheck, { size: 16, style: { color: "var(--celebrate)" } }),
             React.createElement("p", { className: "text-xs font-medium", style: { color: "var(--ink)" } }, "Ya tienes todo apartado para tus pr\u00F3ximos pagos. \u00A1Vas muy bien!"))),
@@ -340,6 +386,27 @@ function Dashboard({ config, expenses, categories, payments, reservations, incom
             React.createElement(QuickAction, { label: "Ingreso", Ic: ArrowDownCircle, onClick: () => onQuickAction({ type: "ingreso" }) }),
             React.createElement(QuickAction, { label: "Pago", Ic: ArrowUpCircle, onClick: () => onQuickAction({ type: "gasto" }) }),
             React.createElement(QuickAction, { label: "Apartar", Ic: Target, onClick: () => onQuickAction({ type: "apartado" }) }))));
+}
+function ProximasSemanas({ plan, categories, expenses, onApartar }) {
+    const weeks = plan.incomeDates.slice(1, 4).filter((wd) => (plan.allocation[wd] || []).length > 0);
+    if (weeks.length === 0)
+        return null;
+    return (React.createElement("div", { className: "rise space-y-2" },
+        React.createElement("p", { className: "text-[11px] tracking-widest uppercase px-1", style: { color: "var(--sub)" } }, "Tus pr\u00F3ximas semanas"),
+        weeks.map((wd, wi) => {
+            const items = plan.allocation[wd] || [];
+            return (React.createElement("div", { key: wd, className: "rise rounded-2xl p-3.5", style: { animationDelay: `${wi * 70}ms`, background: "var(--card)", border: "1px solid var(--border)" } },
+                React.createElement("p", { className: "text-xs font-semibold mb-2", style: { color: "var(--sub)" } }, fmtDate(wd)),
+                items.map((a, i) => {
+                    const info = plan.perExpense.find((e) => e.id === a.expenseId);
+                    const covered = info && info.remaining <= 0;
+                    return (React.createElement("button", { key: i, onClick: () => onApartar(a.expenseId), className: "tap w-full flex items-center justify-between py-1.5" },
+                        React.createElement("span", { className: "flex items-center gap-2 text-sm" },
+                            covered ? (React.createElement(CircleCheck, { size: 14, style: { color: "var(--celebrate)" }, className: "pop shrink-0" })) : (React.createElement("span", { className: "w-3.5 h-3.5 rounded-full shrink-0", style: { border: "1.5px solid var(--border)" } })),
+                            a.name),
+                        React.createElement("span", { className: "f-money text-sm", style: { color: covered ? "var(--celebrate)" : "var(--sub)" } }, MONEY(a.amount))));
+                })));
+        })));
 }
 function WaterfallRow({ label, amount, pct, color, delay, isIncome, onClick, covered }) {
     const [grown, setGrown] = useState(false);
@@ -374,7 +441,7 @@ function buildStatusMessage(proximoPago, disponible) {
     return { tone: "ok", message: `Vas bien: aparta ${MONEY(proximoPago.perWeek)} esta semana para ${proximoPago.name} y llegarás cubierto.` };
 }
 function MiniStat({ label, value, Ic, highlight, delay }) {
-    return (React.createElement("div", { className: "rise rounded-2xl p-3.5 flex items-center gap-2.5", style: { animationDelay: `${delay}ms`, background: highlight ? "var(--accent)" : "var(--card)", border: highlight ? "none" : "1px solid var(--border)" } },
+    return (React.createElement("div", { className: "rise rounded-2xl p-3.5 flex items-center gap-2.5", style: { animationDelay: `${delay}ms`, background: highlight ? "var(--accent)" : "var(--card)", border: highlight ? "none" : "1px solid var(--border)", boxShadow: highlight ? "var(--glow)" : "none" } },
         React.createElement(Ic, { size: 16, style: { color: highlight ? "var(--accentText)" : "var(--accent)" } }),
         React.createElement("div", null,
             React.createElement("p", { className: "text-[10px] tracking-widest uppercase", style: { color: highlight ? "var(--accentText)" : "var(--sub)", opacity: highlight ? 0.85 : 1 } }, label),
@@ -400,41 +467,67 @@ function IngresosScreen({ config, incomeReceipts, setIncomeReceipts, plan }) {
                     React.createElement("button", { onClick: () => setIncomeReceipts(incomeReceipts.filter((x) => x.id !== r.id)), style: { color: "var(--sub)" } },
                         React.createElement(X, { size: 14 })))))))));
 }
-function GastosScreen({ expenses, setExpenses, categories, payments, plan }) {
+function GastosScreen({ expenses, setExpenses, categories, payments, plan, config }) {
     const [showNew, setShowNew] = useState(false);
+    const [view, setView] = useState("lista"); // lista | mensual
+    const monthlyPlan = useMemo(() => computeMonthlyPlan(config, expenses), [config, expenses]);
     return (React.createElement("div", { className: "px-5 mt-2 space-y-3" },
-        React.createElement(Section, { title: "Compromisos", action: React.createElement("button", { onClick: () => setShowNew(true), className: "tap flex items-center gap-1 text-sm font-medium", style: { color: "var(--accent)" } },
-                React.createElement(Plus, { size: 16 }),
-                " Nuevo") }, expenses.map((exp) => {
-            const info = plan.perExpense.find((e) => e.id === exp.id);
-            const cat = categories.find((c) => c.id === exp.categoryId);
-            return (React.createElement("div", { key: exp.id, className: "py-2.5 border-b last:border-0", style: { borderColor: "var(--border)" } },
-                React.createElement("div", { className: "flex items-center justify-between" },
-                    React.createElement("div", { className: "flex items-center gap-2" },
-                        React.createElement("span", { className: "w-2 h-2 rounded-full", style: { background: (cat === null || cat === void 0 ? void 0 : cat.color) || "#9496B8" } }),
-                        React.createElement("div", null,
-                            React.createElement("p", { className: "text-sm font-medium" }, exp.name),
-                            React.createElement("p", { className: "text-xs", style: { color: "var(--sub)" } }, exp.frequency === "monthly" ? `Día ${exp.dueDay} de cada mes` : exp.frequency === "weekly" ? "Cada semana" : "Único"))),
-                    React.createElement("div", { className: "text-right" },
-                        React.createElement("p", { className: "f-money text-sm font-semibold" }, MONEY(exp.amount)),
-                        (info === null || info === void 0 ? void 0 : info.nextOccurrence) && React.createElement("p", { className: "text-[11px]", style: { color: "var(--sub)" } }, fmtDate(info.nextOccurrence)))),
-                React.createElement("div", { className: "flex justify-end mt-1" },
-                    React.createElement("button", { onClick: () => setExpenses(expenses.map((e) => (e.id === exp.id ? { ...e, active: !e.active } : e))), className: "text-[11px] underline underline-offset-2", style: { color: "var(--sub)" } }, exp.active ? "desactivar" : "activar"))));
-        })),
-        React.createElement(Section, { title: "Pagos registrados" },
-            payments.length === 0 && React.createElement(EmptyHint, { text: "A\u00FAn no registras pagos." }),
-            [...payments].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10).map((p) => {
-                var _a;
-                return (React.createElement(Row, { key: p.id, left: `${((_a = expenses.find((e) => e.id === p.expenseId)) === null || _a === void 0 ? void 0 : _a.name) || "Gasto"} · ${fmtDate(p.date)}`, right: MONEY(p.amount) }));
+        React.createElement("div", { className: "flex rounded-full p-1", style: { background: "var(--card)", border: "1px solid var(--border)" } }, [{ id: "lista", label: "Compromisos" }, { id: "mensual", label: "Vista mensual" }].map((v) => (React.createElement("button", { key: v.id, onClick: () => setView(v.id), className: "tap flex-1 text-xs font-semibold py-1.5 rounded-full transition-colors", style: { background: view === v.id ? "var(--accent)" : "transparent", color: view === v.id ? "var(--accentText)" : "var(--sub)" } }, v.label)))),
+        view === "mensual" ? (React.createElement(MonthlyView, { monthlyPlan: monthlyPlan })) : (React.createElement(React.Fragment, null,
+            React.createElement(Section, { title: "Compromisos", action: React.createElement("button", { onClick: () => setShowNew(true), className: "tap flex items-center gap-1 text-sm font-medium", style: { color: "var(--accent)" } },
+                    React.createElement(Plus, { size: 16 }),
+                    " Nuevo") }, expenses.map((exp) => {
+                const info = plan.perExpense.find((e) => e.id === exp.id);
+                const cat = categories.find((c) => c.id === exp.categoryId);
+                return (React.createElement("div", { key: exp.id, className: "py-2.5 border-b last:border-0", style: { borderColor: "var(--border)" } },
+                    React.createElement("div", { className: "flex items-center justify-between" },
+                        React.createElement("div", { className: "flex items-center gap-2" },
+                            React.createElement("span", { className: "w-2 h-2 rounded-full", style: { background: (cat === null || cat === void 0 ? void 0 : cat.color) || "#9496B8" } }),
+                            React.createElement("div", null,
+                                React.createElement("p", { className: "text-sm font-medium" }, exp.name),
+                                React.createElement("p", { className: "text-xs", style: { color: "var(--sub)" } }, exp.frequency === "monthly" ? `Día ${exp.dueDay} de cada mes` : exp.frequency === "weekly" ? "Cada semana" : "Único"))),
+                        React.createElement("div", { className: "text-right" },
+                            React.createElement("p", { className: "f-money text-sm font-semibold" }, MONEY(exp.amount)),
+                            (info === null || info === void 0 ? void 0 : info.nextOccurrence) && React.createElement("p", { className: "text-[11px]", style: { color: "var(--sub)" } }, fmtDate(info.nextOccurrence)))),
+                    React.createElement("div", { className: "flex justify-end mt-1" },
+                        React.createElement("button", { onClick: () => setExpenses(expenses.map((e) => (e.id === exp.id ? { ...e, active: !e.active } : e))), className: "text-[11px] underline underline-offset-2", style: { color: "var(--sub)" } }, exp.active ? "desactivar" : "activar"))));
             })),
-        showNew && React.createElement(NuevoGastoModal, { categories: categories, onClose: () => setShowNew(false), onSave: (exp) => { setExpenses([...expenses, exp]); setShowNew(false); } })));
+            React.createElement(Section, { title: "Pagos registrados" },
+                payments.length === 0 && React.createElement(EmptyHint, { text: "A\u00FAn no registras pagos." }),
+                [...payments].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10).map((p) => {
+                    var _a;
+                    return (React.createElement(Row, { key: p.id, left: `${p.label || ((_a = expenses.find((e) => e.id === p.expenseId)) === null || _a === void 0 ? void 0 : _a.name) || "Gasto"} · ${fmtDate(p.date)}`, right: MONEY(p.amount) }));
+                })),
+            showNew && React.createElement(NuevoGastoModal, { categories: categories, onClose: () => setShowNew(false), onSave: (exp) => { setExpenses([...expenses, exp]); setShowNew(false); } })))));
+}
+function MonthlyView({ monthlyPlan }) {
+    return (React.createElement("div", { className: "space-y-3" }, monthlyPlan.map((mo, i) => {
+        const disponible = mo.incomeEstimate - mo.total;
+        return (React.createElement("div", { key: mo.key, className: "rise rounded-2xl p-4", style: { animationDelay: `${i * 80}ms`, background: "var(--card)", border: "1px solid var(--border)" } },
+            React.createElement("p", { className: "f-display font-semibold capitalize mb-2" }, mo.label),
+            mo.items.length === 0 && React.createElement(EmptyHint, { text: "Sin compromisos este mes." }),
+            mo.items.map((it, idx) => (React.createElement("div", { key: idx, className: "flex items-center justify-between text-sm py-1" },
+                React.createElement("span", null,
+                    it.name,
+                    it.date ? React.createElement("span", { className: "text-xs", style: { color: "var(--sub)" } },
+                        " \u00B7 ",
+                        fmtDate(it.date)) : null),
+                React.createElement("span", { className: "f-money" }, MONEY(it.amount))))),
+            React.createElement("div", { className: "mt-2 pt-2 flex items-center justify-between", style: { borderTop: "1px dashed var(--border)" } },
+                React.createElement("span", { className: "text-xs", style: { color: "var(--sub)" } },
+                    "Ingreso estimado ",
+                    MONEY(mo.incomeEstimate)),
+                React.createElement("span", { className: "text-sm font-bold", style: { color: disponible >= 0 ? "var(--accent)" : "var(--risk)" } },
+                    disponible >= 0 ? "+" : "",
+                    MONEY(disponible)))));
+    })));
 }
 function AhorrosScreen({ savingsGoals, setSavingsGoals, totalAhorrado }) {
     const [showNew, setShowNew] = useState(false);
     const [contributeId, setContributeId] = useState(null);
     const animTotal = useCountUp(totalAhorrado);
     return (React.createElement("div", { className: "px-5 mt-2 space-y-3" },
-        React.createElement("div", { className: "rounded-3xl p-5 text-center", style: { background: "var(--accent)" } },
+        React.createElement("div", { className: "rounded-3xl p-5 text-center", style: { background: "var(--accent)", boxShadow: "var(--glow)" } },
             React.createElement("p", { className: "text-[11px] tracking-widest uppercase", style: { color: "var(--accentText)", opacity: 0.85 } }, "Total ahorrado"),
             React.createElement("p", { className: "f-money text-3xl font-bold", style: { color: "var(--accentText)" } }, MONEY(animTotal))),
         React.createElement(Section, { title: "Objetivos de ahorro", action: React.createElement("button", { onClick: () => setShowNew(true), className: "tap flex items-center gap-1 text-sm font-medium", style: { color: "var(--accent)" } },
@@ -514,19 +607,34 @@ function RegistrarIngresoModal({ config, onClose, onSave }) {
 function RegistrarPagoModal({ expenses, plan, onClose, onSave }) {
     var _a, _b;
     const active = expenses.filter((e) => e.active);
-    const [expenseId, setExpenseId] = useState(((_a = active[0]) === null || _a === void 0 ? void 0 : _a.id) || "");
+    const [expenseId, setExpenseId] = useState(((_a = active[0]) === null || _a === void 0 ? void 0 : _a.id) || "__manual__");
+    const [manualLabel, setManualLabel] = useState("");
+    const isManual = expenseId === "__manual__";
     const [amount, setAmount] = useState(((_b = plan.perExpense.find((e) => { var _a; return e.id === ((_a = active[0]) === null || _a === void 0 ? void 0 : _a.id); })) === null || _b === void 0 ? void 0 : _b.amount) || 0);
     const [date, setDate] = useState(todayISO());
-    useEffect(() => { const i = plan.perExpense.find((e) => e.id === expenseId); if (i)
+    useEffect(() => { if (isManual)
+        return; const i = plan.perExpense.find((e) => e.id === expenseId); if (i)
         setAmount(i.amount); }, [expenseId]); // eslint-disable-line
     return (React.createElement(ModalShell, { title: "Registrar pago", onClose: onClose },
         React.createElement(Field, { label: "Compromiso" },
-            React.createElement("select", { value: expenseId, onChange: (e) => setExpenseId(e.target.value), className: inputCls }, active.map((e) => React.createElement("option", { key: e.id, value: e.id }, e.name)))),
+            React.createElement("select", { value: expenseId, onChange: (e) => setExpenseId(e.target.value), className: inputCls },
+                active.map((e) => React.createElement("option", { key: e.id, value: e.id }, e.name)),
+                React.createElement("option", { value: "__manual__" }, "Otro (pago manual)"))),
+        isManual && (React.createElement(Field, { label: "Concepto" },
+            React.createElement("input", { value: manualLabel, onChange: (e) => setManualLabel(e.target.value), placeholder: "ej. Reparaci\u00F3n del coche", className: inputCls }))),
         React.createElement(Field, { label: "Monto" },
             React.createElement("input", { type: "number", value: amount, onChange: (e) => setAmount(Number(e.target.value)), className: inputCls })),
         React.createElement(Field, { label: "Fecha" },
             React.createElement("input", { type: "date", value: date, onChange: (e) => setDate(e.target.value), className: inputCls })),
-        React.createElement("button", { onClick: () => { var _a; const occ = ((_a = plan.perExpense.find((e) => e.id === expenseId)) === null || _a === void 0 ? void 0 : _a.nextOccurrence) || date; onSave({ id: Date.now().toString(), expenseId, amount, date, occurrence: occ }); }, disabled: !expenseId, className: "tap w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-40", style: { background: "var(--accent)", color: "var(--accentText)" } },
+        React.createElement("button", { onClick: () => {
+                var _a;
+                if (isManual) {
+                    onSave({ id: Date.now().toString(), expenseId: null, label: manualLabel || "Pago manual", amount, date, occurrence: date });
+                    return;
+                }
+                const occ = ((_a = plan.perExpense.find((e) => e.id === expenseId)) === null || _a === void 0 ? void 0 : _a.nextOccurrence) || date;
+                onSave({ id: Date.now().toString(), expenseId, amount, date, occurrence: occ });
+            }, disabled: !expenseId || (isManual && !manualLabel) || !amount, className: "tap w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-40", style: { background: "var(--accent)", color: "var(--accentText)" } },
             React.createElement(Check, { size: 16 }),
             " Marcar como pagado")));
 }
