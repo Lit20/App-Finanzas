@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>Mis Finanzas</title>
+<link rel="icon" href="data:,">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+  html,body{margin:0;padding:0;}
+  .f-display{font-family:'Sora',sans-serif;}
+  .f-body{font-family:'Manrope',sans-serif;}
+  .f-money{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback } = React;
+
+/* ============================================================
+   ICONOS — SVG propios, sin dependencias externas.
+   ============================================================ */
+const Icon = ({ children, size = 18, ...p }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}>{children}</svg>
+);
+const IHome = (p) => <Icon {...p}><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></Icon>;
+const IDown = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><path d="M12 8v8M9 13l3 3 3-3"/></Icon>;
+const IUp = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><path d="M12 16V8M9 11l3-3 3 3"/></Icon>;
+const ISettings = (p) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></Icon>;
+const IPlus = (p) => <Icon {...p}><path d="M12 5v14M5 12h14"/></Icon>;
+const IX = (p) => <Icon {...p}><path d="M18 6L6 18M6 6l12 12"/></Icon>;
+const ICheck = (p) => <Icon {...p}><path d="M20 6L9 17l-5-5"/></Icon>;
+const IChevron = (p) => <Icon {...p}><path d="M9 6l6 6-6 6"/></Icon>;
+const ICoins = (p) => <Icon {...p}><circle cx="9" cy="9" r="6"/><path d="M14.5 14.5A6 6 0 109 20a6 6 0 005.5-5.5z"/></Icon>;
+const IPiggy = (p) => <Icon {...p}><path d="M19 9V7a2 2 0 00-2-2h-1.3a4.5 4.5 0 00-7.4 0H5a2 2 0 00-2 2v4a2 2 0 002 2h.5"/><path d="M5 13v4a2 2 0 002 2h1v2h2v-2h4v2h2v-2h1a2 2 0 002-2v-2a3 3 0 003-3"/><circle cx="15" cy="10" r="1"/></Icon>;
+const IWarn = (p) => <Icon {...p}><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/></Icon>;
+const IOk = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></Icon>;
+const ISun = (p) => <Icon {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></Icon>;
+const IMoon = (p) => <Icon {...p}><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></Icon>;
+const ITarget = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></Icon>;
+
+/* ============================================================
+   DOMAIN — reglas de negocio puras, sin UI.
+   ============================================================ */
+const pad = (n) => String(n).padStart(2, "0");
+const toISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fromISO = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const addDays = (iso, n) => { const d = fromISO(iso); d.setDate(d.getDate() + n); return toISO(d); };
+const daysInMonth = (year, monthIdx) => new Date(year, monthIdx + 1, 0).getDate();
+const todayISO = () => toISO(new Date());
+const WEEKDAY_NAMES = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+function nextMonthDayOnOrAfter(fromDateISO, day) {
+  let d = fromISO(fromDateISO);
+  for (let i = 0; i < 3; i++) {
+    const y = d.getFullYear(), m = d.getMonth();
+    const clamped = Math.min(day, daysInMonth(y, m));
+    const candidate = new Date(y, m, clamped);
+    if (toISO(candidate) >= fromDateISO) return toISO(candidate);
+    d = new Date(y, m + 1, 1);
+  }
+  return null;
+}
+function nextWeekdayOnOrAfter(fromDateISO, weekday) {
+  const d = fromISO(fromDateISO);
+  const diff = (weekday - d.getDay() + 7) % 7;
+  d.setDate(d.getDate() + diff);
+  return toISO(d);
+}
+function generateWeeklyDates(fromISOdate, toISOdate, weekday) {
+  const out = []; let cur = nextWeekdayOnOrAfter(fromISOdate, weekday);
+  while (cur <= toISOdate) { out.push(cur); cur = addDays(cur, 7); }
+  return out;
+}
+function getNextUnpaidOccurrence(expense, payments, fromDateISO) {
+  let from = fromDateISO;
+  for (let i = 0; i < 24; i++) {
+    let candidate;
+    if (expense.frequency === "monthly") candidate = nextMonthDayOnOrAfter(from, expense.dueDay);
+    else if (expense.frequency === "weekly") candidate = nextWeekdayOnOrAfter(from, expense.dueDay);
+    else candidate = expense.dueDate && expense.dueDate >= from ? expense.dueDate : null;
+    if (!candidate) return null;
+    const paid = payments.some((p) => p.expenseId === expense.id && p.occurrence === candidate);
+    if (!paid) return candidate;
+    from = addDays(candidate, 1);
+  }
+  return null;
+}
+function sumReserved(reservations, expenseId, occurrence) {
+  return reservations.filter((r) => r.expenseId === expenseId && r.occurrence === occurrence).reduce((s, r) => s + r.amount, 0);
+}
+function computeApartados(config, expenses, payments, reservations, horizonDays = 45) {
+  const today = todayISO();
+  const horizon = addDays(today, horizonDays);
+  const incomeDates = generateWeeklyDates(today, horizon, config.payday);
+  const allocation = {};
+  incomeDates.forEach((d) => (allocation[d] = []));
+  const perExpense = expenses.filter((e) => e.active).map((exp) => {
+    const occ = getNextUnpaidOccurrence(exp, payments, today);
+    if (!occ) return { ...exp, nextOccurrence: null };
+    const reserved = sumReserved(reservations, exp.id, occ);
+    const remaining = Math.max(0, exp.amount - reserved);
+    const eligible = incomeDates.filter((d) => d <= occ);
+    const n = Math.max(1, eligible.length);
+    const perWeek = remaining / n;
+    eligible.forEach((d) => allocation[d].push({ expenseId: exp.id, name: exp.name, amount: perWeek, occurrence: occ }));
+    return { ...exp, nextOccurrence: occ, reserved, remaining, perWeek, coveredWeeks: eligible.length };
+  });
+  return { incomeDates, allocation, perExpense };
+}
+
+/* ============================================================
+   DATA — persistencia en localStorage (archivo autónomo).
+   ============================================================ */
+function useStoredState(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = localStorage.getItem("finanzas:" + key);
+      return raw ? JSON.parse(raw) : initialValue;
+    } catch (e) { return initialValue; }
+  });
+  const persist = useCallback((next) => {
+    setValue(next);
+    try { localStorage.setItem("finanzas:" + key, JSON.stringify(next)); } catch (e) {}
+  }, [key]);
+  return [value, persist];
+}
+
+const DEFAULT_CONFIG = { weeklyIncome: 2800, payday: 5, currency: "MXN" };
+const DEFAULT_CATEGORIES = [
+  { id: "escuela", name: "Escuela", color: "#9A7B2E" },
+  { id: "servicios", name: "Servicios", color: "#3E6FB0" },
+  { id: "casa", name: "Casa", color: "#6B7280" },
+  { id: "otros", name: "Otros", color: "#8B6F47" },
+];
+const DEFAULT_EXPENSES = [
+  { id: "escuela", name: "Escuela", amount: 1800, categoryId: "escuela", frequency: "monthly", dueDay: 7, active: true },
+  { id: "telefono", name: "Teléfono", amount: 1100, categoryId: "servicios", frequency: "monthly", dueDay: 11, active: true },
+  { id: "casa", name: "Compromiso semanal", amount: 800, categoryId: "casa", frequency: "weekly", dueDay: 5, active: true },
+];
+const MONEY = (n) => (n || 0).toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
+const fmtDate = (iso) => fromISO(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+
+/* ============================================================
+   THEME — dorado sobre carbón / marfil frío. Elegante, no genérico.
+   ============================================================ */
+const THEMES = {
+  light: {
+    bg: "#EEF0F2", card: "#FFFFFF", border: "#E1E4E8", ink: "#14161A", sub: "#6B6F76",
+    accent: "#9A7B2E", accentText: "#FFFFFF", accentSoft: "#F3EBD8",
+    warnSoft: "#F7EEDC", warn: "#A6721C", riskSoft: "#F8E6E1", risk: "#AC3F2A", navBg: "#FFFFFF",
+  },
+  dark: {
+    bg: "#0E0F13", card: "#17181D", border: "#2A2C33", ink: "#F2F1EA", sub: "#9A9C9F",
+    accent: "#D4AF37", accentText: "#14161A", accentSoft: "#2A2414",
+    warnSoft: "#2E2717", warn: "#E4B15A", riskSoft: "#301A17", risk: "#E4836E", navBg: "#17181D",
+  },
+};
+
+function FinanzasApp() {
+  const [config, setConfig] = useStoredState("config", DEFAULT_CONFIG);
+  const [categories] = useStoredState("categories", DEFAULT_CATEGORIES);
+  const [expenses, setExpenses] = useStoredState("expenses", DEFAULT_EXPENSES);
+  const [payments, setPayments] = useStoredState("payments", []);
+  const [reservations, setReservations] = useStoredState("reservations", []);
+  const [incomeReceipts, setIncomeReceipts] = useStoredState("incomeReceipts", []);
+  const [savingsGoals, setSavingsGoals] = useStoredState("savingsGoals", []);
+  const [themeName, setThemeName] = useStoredState("theme", "light");
+  const [tab, setTab] = useState("inicio");
+  const [modal, setModal] = useState(null);
+
+  const t = THEMES[themeName] || THEMES.light;
+  const plan = useMemo(() => computeApartados(config, expenses, payments, reservations), [config, expenses, payments, reservations]);
+  const totalAhorrado = savingsGoals.reduce((s, g) => s + g.saved, 0);
+
+  const vars = {
+    "--bg": t.bg, "--card": t.card, "--border": t.border, "--ink": t.ink, "--sub": t.sub,
+    "--accent": t.accent, "--accentText": t.accentText, "--accentSoft": t.accentSoft,
+    "--warnSoft": t.warnSoft, "--warn": t.warn, "--riskSoft": t.riskSoft, "--risk": t.risk, "--navBg": t.navBg,
+  };
+
+  return (
+    <div style={vars} className="min-h-screen bg-[var(--bg)] text-[var(--ink)] pb-24 transition-colors duration-300">
+      <div className="f-body max-w-md mx-auto">
+        <Header config={config} themeName={themeName} onToggleTheme={() => setThemeName(themeName === "light" ? "dark" : "light")} />
+        {tab === "inicio" && (
+          <Dashboard config={config} expenses={expenses} categories={categories} payments={payments} reservations={reservations}
+            incomeReceipts={incomeReceipts} totalAhorrado={totalAhorrado} plan={plan} onQuickAction={setModal} />
+        )}
+        {tab === "ingresos" && <IngresosScreen config={config} incomeReceipts={incomeReceipts} setIncomeReceipts={setIncomeReceipts} plan={plan} />}
+        {tab === "gastos" && <GastosScreen expenses={expenses} setExpenses={setExpenses} categories={categories} payments={payments} plan={plan} />}
+        {tab === "ahorros" && <AhorrosScreen savingsGoals={savingsGoals} setSavingsGoals={setSavingsGoals} totalAhorrado={totalAhorrado} />}
+        {tab === "ajustes" && <AjustesScreen config={config} setConfig={setConfig} />}
+      </div>
+      <BottomNav tab={tab} setTab={setTab} />
+      {modal === "ingreso" && <RegistrarIngresoModal config={config} onClose={() => setModal(null)} onSave={(e) => { setIncomeReceipts([...incomeReceipts, e]); setModal(null); }} />}
+      {modal === "gasto" && <RegistrarPagoModal expenses={expenses} plan={plan} onClose={() => setModal(null)} onSave={(e) => { setPayments([...payments, e]); setModal(null); }} />}
+      {modal === "apartado" && <RegistrarApartadoModal expenses={expenses} plan={plan} onClose={() => setModal(null)} onSave={(e) => { setReservations([...reservations, e]); setModal(null); }} />}
+    </div>
+  );
+}
+
+function Header({ config, themeName, onToggleTheme }) {
+  return (
+    <div className="px-5 pt-6 pb-2 flex items-center justify-between">
+      <div>
+        <p className="text-[11px] tracking-[0.2em] text-[var(--sub)] uppercase">Mis finanzas</p>
+        <h1 className="f-display text-xl font-bold">Ciclo de {WEEKDAY_NAMES[config.payday]}</h1>
+      </div>
+      <button onClick={onToggleTheme} className="w-9 h-9 rounded-full bg-[var(--card)] border border-[var(--border)] flex items-center justify-center" aria-label="Cambiar tema">
+        {themeName === "light" ? <IMoon size={16} /> : <ISun size={16} />}
+      </button>
+    </div>
+  );
+}
+
+function BottomNav({ tab, setTab }) {
+  const items = [
+    { id: "inicio", label: "Inicio", Icon: IHome },
+    { id: "ingresos", label: "Ingresos", Icon: IDown },
+    { id: "gastos", label: "Gastos", Icon: IUp },
+    { id: "ahorros", label: "Ahorros", Icon: IPiggy },
+    { id: "ajustes", label: "Ajustes", Icon: ISettings },
+  ];
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 bg-[var(--navBg)] border-t border-[var(--border)]">
+      <div className="max-w-md mx-auto flex">
+        {items.map((it) => {
+          const active = tab === it.id;
+          return (
+            <button key={it.id} onClick={() => setTab(it.id)} className="flex-1 flex flex-col items-center gap-1 py-2.5">
+              <it.Icon size={19} style={{ color: active ? "var(--accent)" : "var(--sub)" }} />
+              <span className="text-[10px]" style={{ color: active ? "var(--accent)" : "var(--sub)", fontWeight: active ? 600 : 400 }}>{it.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function Dashboard({ config, expenses, categories, payments, reservations, incomeReceipts, totalAhorrado, plan, onQuickAction }) {
+  const saldo = incomeReceipts.reduce((s, r) => s + r.amount, 0) - payments.reduce((s, p) => s + p.amount, 0);
+  const totalReservado = reservations.reduce((s, r) => s + r.amount, 0);
+  const thisWeekDate = plan.incomeDates[0];
+  const thisWeekAlloc = plan.allocation[thisWeekDate] || [];
+  const committedThisWeek = thisWeekAlloc.reduce((s, a) => s + a.amount, 0);
+  const disponible = config.weeklyIncome - committedThisWeek;
+  const pctDisponible = Math.max(0, Math.min(100, (disponible / config.weeklyIncome) * 100));
+  const proximoPago = [...plan.perExpense].filter((e) => e.nextOccurrence).sort((a, b) => (a.nextOccurrence > b.nextOccurrence ? 1 : -1))[0];
+  const status = buildStatusMessage(proximoPago, disponible);
+
+  let acc = 0; const stops = [];
+  thisWeekAlloc.forEach((a) => {
+    const pct = (a.amount / config.weeklyIncome) * 100;
+    stops.push(`${colorFor(a.expenseId, categories, expenses)} ${acc}% ${acc + pct}%`);
+    acc += pct;
+  });
+  stops.push(`var(--accent) ${acc}% 100%`);
+  const ringStyle = { background: `conic-gradient(${stops.join(", ")})` };
+
+  return (
+    <div className="px-5 space-y-3 mt-2">
+      <div className="rounded-3xl p-5" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+        <div className="flex items-center gap-5">
+          <div className="relative w-28 h-28 shrink-0 rounded-full" style={ringStyle}>
+            <div className="absolute inset-[8px] rounded-full flex flex-col items-center justify-center" style={{ background: "var(--card)" }}>
+              <p className="text-[9px] tracking-widest uppercase" style={{ color: "var(--sub)" }}>Disponible</p>
+              <p className="f-money text-base font-bold leading-tight">{MONEY(disponible)}</p>
+            </div>
+          </div>
+          <div className="flex-1">
+            <p className="text-[11px] tracking-widest uppercase" style={{ color: "var(--sub)" }}>Ingreso de esta semana</p>
+            <p className="f-money text-2xl font-semibold">{MONEY(config.weeklyIncome)}</p>
+            <p className="text-xs mt-1" style={{ color: "var(--sub)" }}>{pctDisponible.toFixed(0)}% libre para gastar</p>
+          </div>
+        </div>
+        {thisWeekAlloc.length > 0 && (
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-4 text-xs" style={{ color: "var(--sub)" }}>
+            {thisWeekAlloc.map((a, i) => (
+              <span key={i} className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ background: colorFor(a.expenseId, categories, expenses) }} />
+                {a.name} · {MONEY(a.amount)}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <MiniStat label="Saldo" value={MONEY(saldo)} Ic={ICoins} />
+        <MiniStat label="Apartado" value={MONEY(totalReservado)} Ic={ITarget} />
+        <MiniStat label="Ahorrado" value={MONEY(totalAhorrado)} Ic={IPiggy} />
+        <MiniStat label="Disponible" value={MONEY(disponible)} Ic={IDown} highlight />
+      </div>
+
+      <div className="rounded-2xl p-4 flex gap-3 items-start" style={{ background: status.tone === "risk" ? "var(--riskSoft)" : status.tone === "warn" ? "var(--warnSoft)" : "var(--accentSoft)" }}>
+        {status.tone === "risk" ? <IWarn size={18} style={{ color: "var(--risk)" }} className="mt-0.5 shrink-0" /> : <IOk size={18} style={{ color: "var(--accent)" }} className="mt-0.5 shrink-0" />}
+        <p className="text-sm" style={{ color: "var(--ink)" }}>{status.message}</p>
+      </div>
+
+      {proximoPago && (
+        <div className="rounded-2xl p-4" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+          <p className="text-[11px] tracking-widest uppercase mb-2" style={{ color: "var(--sub)" }}>Próximo pago</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="f-display font-semibold">{proximoPago.name}</p>
+              <p className="text-xs" style={{ color: "var(--sub)" }}>{fmtDate(proximoPago.nextOccurrence)}</p>
+            </div>
+            <div className="text-right">
+              <p className="f-money font-semibold">{MONEY(proximoPago.amount)}</p>
+              <p className="text-[11px]" style={{ color: "var(--sub)" }}>apartado: {MONEY(proximoPago.reserved)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-2">
+        <QuickAction label="Ingreso" Ic={IDown} onClick={() => onQuickAction("ingreso")} />
+        <QuickAction label="Pago" Ic={IUp} onClick={() => onQuickAction("gasto")} />
+        <QuickAction label="Apartar" Ic={ITarget} onClick={() => onQuickAction("apartado")} />
+      </div>
+    </div>
+  );
+}
+
+function colorFor(expenseId, categories, expenses) {
+  const exp = expenses.find((e) => e.id === expenseId);
+  const cat = categories.find((c) => c.id === exp?.categoryId);
+  return cat?.color || "#8B8F86";
+}
+function buildStatusMessage(proximoPago, disponible) {
+  if (disponible < 0) return { tone: "risk", message: `Cuidado: tus compromisos de esta semana superan tu ingreso por ${MONEY(-disponible)}.` };
+  if (!proximoPago) return { tone: "ok", message: "No tienes pagos próximos pendientes. Vas bien esta semana." };
+  const faltante = proximoPago.remaining;
+  if (faltante <= 0) return { tone: "ok", message: `Ya tienes cubierto tu pago de ${proximoPago.name} (${fmtDate(proximoPago.nextOccurrence)}).` };
+  if (proximoPago.coveredWeeks <= 1) return { tone: "warn", message: `Necesitas apartar ${MONEY(proximoPago.perWeek)} esta semana para llegar completo a ${proximoPago.name}.` };
+  return { tone: "ok", message: `Vas bien: aparta ${MONEY(proximoPago.perWeek)} esta semana para ${proximoPago.name} y llegarás cubierto.` };
+}
+function MiniStat({ label, value, Ic, highlight }) {
+  return (
+    <div className="rounded-2xl p-3.5 flex items-center gap-2.5" style={{ background: highlight ? "var(--accent)" : "var(--card)", border: highlight ? "none" : "1px solid var(--border)" }}>
+      <Ic size={16} style={{ color: highlight ? "var(--accentText)" : "var(--accent)" }} />
+      <div>
+        <p className="text-[10px] tracking-widest uppercase" style={{ color: highlight ? "var(--accentText)" : "var(--sub)", opacity: highlight ? 0.85 : 1 }}>{label}</p>
+        <p className="f-money text-sm font-semibold" style={{ color: highlight ? "var(--accentText)" : "var(--ink)" }}>{value}</p>
+      </div>
+    </div>
+  );
+}
+function QuickAction({ label, Ic, onClick }) {
+  return (
+    <button onClick={onClick} className="rounded-2xl p-3 flex flex-col items-center gap-1.5 active:scale-95 transition-transform" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+      <Ic size={19} style={{ color: "var(--accent)" }} />
+      <span className="text-xs font-medium">{label}</span>
+    </button>
+  );
+}
+
+function IngresosScreen({ config, incomeReceipts, setIncomeReceipts, plan }) {
+  const sorted = [...incomeReceipts].sort((a, b) => (a.date < b.date ? 1 : -1));
+  return (
+    <div className="px-5 mt-2 space-y-3">
+      <Section title="Próximos ingresos esperados">
+        {plan.incomeDates.slice(0, 4).map((d) => <Row key={d} left={fmtDate(d)} right={MONEY(config.weeklyIncome)} />)}
+      </Section>
+      <Section title="Historial">
+        {sorted.length === 0 && <EmptyHint text="Aún no registras ningún ingreso recibido." />}
+        {sorted.map((r) => (
+          <div key={r.id} className="flex items-center justify-between py-2.5 border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+            <div>
+              <p className="text-sm font-medium">{r.concept || "Ingreso"}</p>
+              <p className="text-xs" style={{ color: "var(--sub)" }}>{fmtDate(r.date)}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="f-money text-sm font-semibold">{MONEY(r.amount)}</p>
+              <button onClick={() => setIncomeReceipts(incomeReceipts.filter((x) => x.id !== r.id))} style={{ color: "var(--sub)" }}><IX size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </Section>
+    </div>
+  );
+}
+
+function GastosScreen({ expenses, setExpenses, categories, payments, plan }) {
+  const [showNew, setShowNew] = useState(false);
+  return (
+    <div className="px-5 mt-2 space-y-3">
+      <Section title="Compromisos" action={<button onClick={() => setShowNew(true)} className="flex items-center gap-1 text-sm font-medium" style={{ color: "var(--accent)" }}><IPlus size={16} /> Nuevo</button>}>
+        {expenses.map((exp) => {
+          const info = plan.perExpense.find((e) => e.id === exp.id);
+          const cat = categories.find((c) => c.id === exp.categoryId);
+          return (
+            <div key={exp.id} className="py-2.5 border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full" style={{ background: cat?.color || "#8B8F86" }} />
+                  <div>
+                    <p className="text-sm font-medium">{exp.name}</p>
+                    <p className="text-xs" style={{ color: "var(--sub)" }}>{exp.frequency === "monthly" ? `Día ${exp.dueDay} de cada mes` : exp.frequency === "weekly" ? "Cada semana" : "Único"}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="f-money text-sm font-semibold">{MONEY(exp.amount)}</p>
+                  {info?.nextOccurrence && <p className="text-[11px]" style={{ color: "var(--sub)" }}>{fmtDate(info.nextOccurrence)}</p>}
+                </div>
+              </div>
+              <div className="flex justify-end mt-1">
+                <button onClick={() => setExpenses(expenses.map((e) => (e.id === exp.id ? { ...e, active: !e.active } : e)))} className="text-[11px] underline underline-offset-2" style={{ color: "var(--sub)" }}>
+                  {exp.active ? "desactivar" : "activar"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {expenses.length === 0 && <EmptyHint text="No tienes compromisos configurados todavía." />}
+      </Section>
+      <Section title="Pagos registrados">
+        {payments.length === 0 && <EmptyHint text="Aún no registras pagos." />}
+        {[...payments].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10).map((p) => (
+          <Row key={p.id} left={`${expenses.find((e) => e.id === p.expenseId)?.name || "Gasto"} · ${fmtDate(p.date)}`} right={MONEY(p.amount)} />
+        ))}
+      </Section>
+      {showNew && <NuevoGastoModal categories={categories} onClose={() => setShowNew(false)} onSave={(exp) => { setExpenses([...expenses, exp]); setShowNew(false); }} />}
+    </div>
+  );
+}
+
+function AhorrosScreen({ savingsGoals, setSavingsGoals, totalAhorrado }) {
+  const [showNew, setShowNew] = useState(false);
+  const [contributeId, setContributeId] = useState(null);
+  return (
+    <div className="px-5 mt-2 space-y-3">
+      <div className="rounded-3xl p-5 text-center" style={{ background: "var(--accent)" }}>
+        <p className="text-[11px] tracking-widest uppercase" style={{ color: "var(--accentText)", opacity: 0.85 }}>Total ahorrado</p>
+        <p className="f-money text-3xl font-bold" style={{ color: "var(--accentText)" }}>{MONEY(totalAhorrado)}</p>
+      </div>
+      <Section title="Objetivos de ahorro" action={<button onClick={() => setShowNew(true)} className="flex items-center gap-1 text-sm font-medium" style={{ color: "var(--accent)" }}><IPlus size={16} /> Nuevo</button>}>
+        {savingsGoals.length === 0 && <EmptyHint text="Aún no tienes objetivos de ahorro. Crea uno para empezar a juntar." />}
+        {savingsGoals.map((g) => {
+          const pct = g.target ? Math.min(100, (g.saved / g.target) * 100) : 100;
+          return (
+            <div key={g.id} className="py-3 border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-sm font-medium">{g.name}</p>
+                <button onClick={() => setContributeId(g.id)} className="text-xs font-semibold" style={{ color: "var(--accent)" }}>+ Aportar</button>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--accent)" }} />
+              </div>
+              <div className="flex justify-between text-xs mt-1" style={{ color: "var(--sub)" }}>
+                <span>{MONEY(g.saved)} ahorrado</span>
+                <span>meta {g.target ? MONEY(g.target) : "libre"}</span>
+              </div>
+            </div>
+          );
+        })}
+      </Section>
+      {showNew && <NuevoAhorroModal onClose={() => setShowNew(false)} onSave={(goal) => { setSavingsGoals([...savingsGoals, goal]); setShowNew(false); }} />}
+      {contributeId && (
+        <AportarModal goal={savingsGoals.find((g) => g.id === contributeId)} onClose={() => setContributeId(null)}
+          onSave={(amount) => { setSavingsGoals(savingsGoals.map((g) => (g.id === contributeId ? { ...g, saved: g.saved + amount } : g))); setContributeId(null); }} />
+      )}
+    </div>
+  );
+}
+
+function AjustesScreen({ config, setConfig }) {
+  const [local, setLocal] = useState(config);
+  return (
+    <div className="px-5 mt-2 space-y-4">
+      <Section title="Configuración de ingreso">
+        <Field label="Ingreso semanal esperado"><input type="number" value={local.weeklyIncome} onChange={(e) => setLocal({ ...local, weeklyIncome: Number(e.target.value) })} className={inputCls} /></Field>
+        <Field label="Día de pago">
+          <select value={local.payday} onChange={(e) => setLocal({ ...local, payday: Number(e.target.value) })} className={inputCls}>
+            {WEEKDAY_NAMES.map((n, i) => <option key={i} value={i}>{n}</option>)}
+          </select>
+        </Field>
+        <button onClick={() => setConfig(local)} className="w-full rounded-xl py-2.5 text-sm font-semibold mt-2" style={{ background: "var(--accent)", color: "var(--accentText)" }}>Guardar cambios</button>
+      </Section>
+      <p className="text-xs px-1" style={{ color: "var(--sub)" }}>Estos valores son tu punto de partida y se pueden editar cuando quieras — nada está fijo en el código.</p>
+    </div>
+  );
+}
+
+const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none bg-[var(--bg)] border border-[var(--border)] text-[var(--ink)]";
+function Section({ title, action, children }) {
+  return (
+    <div className="rounded-2xl p-4" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-[11px] tracking-widest uppercase" style={{ color: "var(--sub)" }}>{title}</p>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+function Row({ left, right }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+      <p className="text-sm">{left}</p>
+      <p className="f-money text-sm font-semibold">{right}</p>
+    </div>
+  );
+}
+function EmptyHint({ text }) { return <p className="text-sm py-2" style={{ color: "var(--sub)" }}>{text}</p>; }
+function Field({ label, children }) {
+  return <div className="mb-3"><label className="block text-xs mb-1" style={{ color: "var(--sub)" }}>{label}</label>{children}</div>;
+}
+function ModalShell({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end justify-center z-50">
+      <div className="rounded-t-3xl w-full max-w-md p-5 pb-8" style={{ background: "var(--card)", color: "var(--ink)" }}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="f-display font-bold text-lg">{title}</h2>
+          <button onClick={onClose} style={{ color: "var(--sub)" }}><IX size={20} /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RegistrarIngresoModal({ config, onClose, onSave }) {
+  const [amount, setAmount] = useState(config.weeklyIncome);
+  const [date, setDate] = useState(todayISO());
+  const [concept, setConcept] = useState("Ingreso semanal");
+  return (
+    <ModalShell title="Registrar ingreso" onClose={onClose}>
+      <Field label="Concepto"><input value={concept} onChange={(e) => setConcept(e.target.value)} className={inputCls} /></Field>
+      <Field label="Monto"><input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className={inputCls} /></Field>
+      <Field label="Fecha"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
+      <button onClick={() => onSave({ id: Date.now().toString(), amount, date, concept })} className="w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2" style={{ background: "var(--accent)", color: "var(--accentText)" }}><ICheck size={16} /> Guardar</button>
+    </ModalShell>
+  );
+}
+function RegistrarPagoModal({ expenses, plan, onClose, onSave }) {
+  const active = expenses.filter((e) => e.active);
+  const [expenseId, setExpenseId] = useState(active[0]?.id || "");
+  const [amount, setAmount] = useState(plan.perExpense.find((e) => e.id === active[0]?.id)?.amount || 0);
+  const [date, setDate] = useState(todayISO());
+  useEffect(() => { const i = plan.perExpense.find((e) => e.id === expenseId); if (i) setAmount(i.amount); }, [expenseId]);
+  return (
+    <ModalShell title="Registrar pago" onClose={onClose}>
+      <Field label="Compromiso">
+        <select value={expenseId} onChange={(e) => setExpenseId(e.target.value)} className={inputCls}>
+          {active.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Monto"><input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className={inputCls} /></Field>
+      <Field label="Fecha"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
+      <button onClick={() => { const occ = plan.perExpense.find((e) => e.id === expenseId)?.nextOccurrence || date; onSave({ id: Date.now().toString(), expenseId, amount, date, occurrence: occ }); }}
+        disabled={!expenseId} className="w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: "var(--accent)", color: "var(--accentText)" }}>
+        <ICheck size={16} /> Marcar como pagado
+      </button>
+    </ModalShell>
+  );
+}
+function RegistrarApartadoModal({ expenses, plan, onClose, onSave }) {
+  const active = expenses.filter((e) => e.active);
+  const [expenseId, setExpenseId] = useState(active[0]?.id || "");
+  const [amount, setAmount] = useState(Math.round(plan.perExpense.find((e) => e.id === active[0]?.id)?.perWeek || 0));
+  const [date, setDate] = useState(todayISO());
+  useEffect(() => { const i = plan.perExpense.find((e) => e.id === expenseId); if (i) setAmount(Math.round(i.perWeek)); }, [expenseId]);
+  const info = plan.perExpense.find((e) => e.id === expenseId);
+  return (
+    <ModalShell title="Registrar apartado" onClose={onClose}>
+      <Field label="Compromiso">
+        <select value={expenseId} onChange={(e) => setExpenseId(e.target.value)} className={inputCls}>
+          {active.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+        </select>
+      </Field>
+      {info && <p className="text-xs -mt-2 mb-3" style={{ color: "var(--sub)" }}>Sugerido: {MONEY(info.perWeek)} · vence {fmtDate(info.nextOccurrence)}</p>}
+      <Field label="Monto a apartar"><input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className={inputCls} /></Field>
+      <button onClick={() => { const occ = plan.perExpense.find((e) => e.id === expenseId)?.nextOccurrence; onSave({ id: Date.now().toString(), expenseId, amount, date, occurrence: occ }); }}
+        disabled={!expenseId} className="w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: "var(--accent)", color: "var(--accentText)" }}>
+        <ITarget size={16} /> Apartar
+      </button>
+    </ModalShell>
+  );
+}
+function NuevoGastoModal({ categories, onClose, onSave }) {
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState(0);
+  const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
+  const [frequency, setFrequency] = useState("monthly");
+  const [dueDay, setDueDay] = useState(1);
+  return (
+    <ModalShell title="Nuevo compromiso" onClose={onClose}>
+      <Field label="Nombre"><input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></Field>
+      <Field label="Monto"><input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className={inputCls} /></Field>
+      <Field label="Categoría">
+        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputCls}>
+          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Frecuencia">
+        <select value={frequency} onChange={(e) => setFrequency(e.target.value)} className={inputCls}>
+          <option value="monthly">Mensual (día del mes)</option>
+          <option value="weekly">Semanal (día de la semana)</option>
+          <option value="once">Único</option>
+        </select>
+      </Field>
+      {frequency !== "once" && (
+        <Field label={frequency === "monthly" ? "Día del mes" : "Día de la semana"}>
+          {frequency === "monthly" ? (
+            <input type="number" min={1} max={31} value={dueDay} onChange={(e) => setDueDay(Number(e.target.value))} className={inputCls} />
+          ) : (
+            <select value={dueDay} onChange={(e) => setDueDay(Number(e.target.value))} className={inputCls}>
+              {WEEKDAY_NAMES.map((n, i) => <option key={i} value={i}>{n}</option>)}
+            </select>
+          )}
+        </Field>
+      )}
+      <button onClick={() => onSave({ id: Date.now().toString(), name, amount, categoryId, frequency, dueDay: frequency !== "once" ? dueDay : undefined, dueDate: frequency === "once" ? todayISO() : undefined, active: true })}
+        disabled={!name || !amount} className="w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: "var(--accent)", color: "var(--accentText)" }}>
+        <IChevron size={16} /> Crear compromiso
+      </button>
+    </ModalShell>
+  );
+}
+function NuevoAhorroModal({ onClose, onSave }) {
+  const [name, setName] = useState("");
+  const [target, setTarget] = useState(0);
+  return (
+    <ModalShell title="Nuevo objetivo de ahorro" onClose={onClose}>
+      <Field label="Nombre del objetivo"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="ej. Comprar laptop" className={inputCls} /></Field>
+      <Field label="Meta (opcional)"><input type="number" value={target} onChange={(e) => setTarget(Number(e.target.value))} className={inputCls} /></Field>
+      <button onClick={() => onSave({ id: Date.now().toString(), name, target, saved: 0 })} disabled={!name} className="w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: "var(--accent)", color: "var(--accentText)" }}>
+        <ITarget size={16} /> Crear objetivo
+      </button>
+    </ModalShell>
+  );
+}
+function AportarModal({ goal, onClose, onSave }) {
+  const [amount, setAmount] = useState(0);
+  return (
+    <ModalShell title={`Aportar a "${goal?.name}"`} onClose={onClose}>
+      <Field label="Monto a aportar"><input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className={inputCls} /></Field>
+      <button onClick={() => onSave(amount)} disabled={!amount} className="w-full rounded-xl py-2.5 text-sm font-semibold mt-2 flex items-center justify-center gap-2 disabled:opacity-40" style={{ background: "var(--accent)", color: "var(--accentText)" }}>
+        <IPiggy size={16} /> Aportar
+      </button>
+    </ModalShell>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<FinanzasApp />);
+</script>
+</body>
+</html>
