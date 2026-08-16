@@ -194,28 +194,17 @@ function computeMonthlyPlan(config, expenses, monthsAhead = 3) {
    DATA
    ============================================================ */
 function useStoredState(key, initialValue) {
-    const [value, setValue] = useState(initialValue);
-    const [loaded, setLoaded] = useState(false);
-    useEffect(() => {
-        (async () => {
-            try {
-                const res = await window.storage.get(key, false);
-                if (res === null || res === void 0 ? void 0 : res.value)
-                    setValue(JSON.parse(res.value));
-            }
-            catch (e) { }
-            setLoaded(true);
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [key]);
-    const persist = useCallback(async (next) => {
-        setValue(next);
+    const [value, setValue] = useState(() => {
         try {
-            await window.storage.set(key, JSON.stringify(next), false);
-        }
-        catch (e) { }
+            const raw = localStorage.getItem("finanzas:" + key);
+            return raw ? JSON.parse(raw) : initialValue;
+        } catch (e) { return initialValue; }
+    });
+    const persist = useCallback((next) => {
+        setValue(next);
+        try { localStorage.setItem("finanzas:" + key, JSON.stringify(next)); } catch (e) { }
     }, [key]);
-    return [value, persist, loaded];
+    return [value, persist, true];
 }
 const DEFAULT_CONFIG = { weeklyIncome: 2800, payday: 5, currency: "MXN" };
 const DEFAULT_CATEGORIES = [
